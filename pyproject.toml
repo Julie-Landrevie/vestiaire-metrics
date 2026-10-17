@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vestiaire-metrics"
+version = "0.1.0"
+description = "Indicateurs de charge, de forme et de vitesse pour le football féminin (application Vestiaire)"
+authors = [{ name = "Julie Landrevie" }]
+requires-python = ">=3.10"
+dependencies = ["pandas>=2.0", "numpy>=1.24"]
+
+[project.optional-dependencies]
+notebook = ["matplotlib>=3.7", "jupyter"]
+test = ["pytest>=7"]
+
+[tool.setuptools]
+packages = ["vestiaire_metrics"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
