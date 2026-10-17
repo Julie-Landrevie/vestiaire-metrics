@@ -44,7 +44,13 @@ def charger_dossier(dossier: str | Path, indicateurs: list[str] | None = None) -
     for p in sorted(Path(dossier).rglob("*.csv")):
         if indicateurs and p.stem not in indicateurs:
             continue
-        t = lire_fichier_large(p).rename(columns={"valeur": p.stem})
+        try:
+            t = lire_fichier_large(p).rename(columns={"valeur": p.stem})
+        except Exception as e:  # fichier d'un autre format (blessures, notes...) : on le saute
+            print(f"  fichier ignoré : {p.name} ({e})")
+            continue
+        if t.empty:
+            continue
         tables.setdefault(p.stem, []).append(t)
     if not tables:
         raise FileNotFoundError(f"Aucun CSV trouvé dans {dossier}")

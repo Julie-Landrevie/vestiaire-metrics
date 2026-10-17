@@ -42,6 +42,12 @@ Le carnet `notebooks/01_indicateurs_vestiaire.ipynb` montre tout le calcul, avec
 
 [SoccerMon](https://osf.io/uryz9/) (Midoglu et al., *Scientific Data*, 2024, licence CC-BY 4.0) contient les données de bien-être, de charge et de GPS de deux équipes féminines norvégiennes en 2020 et 2021. Après téléchargement, indiquer le dossier des données subjectives dans la partie 2 du carnet. Le module `soccermon` lit les fichiers CSV « une colonne par joueuse » et les convertit au format Vestiaire.
 
+## Tester sur ses propres données (SoccerMon ou autre)
+
+Le script `analyser_soccermon.py` explore un dossier, reconnaît seul les colonnes de vitesse, de temps et de joueuse,
+compare les seuils féminins et masculins sur chaque séance GPS, recalcule la charge et la forme à partir des
+questionnaires, et produit un rapport HTML. Mode d'emploi pas à pas : `LANCER_SUR_MON_MAC.md`.
+
 ## Tests
 
 ```bash

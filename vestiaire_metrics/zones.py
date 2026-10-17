@@ -43,20 +43,19 @@ def resume_gps(trace: pd.DataFrame, seuils: Seuils = FEMININS, hz: float = 10.0,
     décélérations hautes (effort compté s'il dure au moins ``duree_min_effort_s``),
     vitesse de pointe.
     """
-    v = trace["vitesse_kmh"].to_numpy(dtype=float)
+    v = np.nan_to_num(trace["vitesse_kmh"].to_numpy(dtype=float), nan=0.0)
     dt = 1.0 / hz
     dist = v / 3.6 * dt
     zones = zone_vitesse(v, seuils)
-    acc = np.gradient(v / 3.6, dt)
+    acc = np.gradient(v / 3.6, dt) if len(v) > 1 else np.zeros_like(v)
     n_min = max(1, int(round(duree_min_effort_s * hz)))
 
     def efforts(masque: np.ndarray) -> int:
-        n, run = 0, 0
-        for m in masque:
-            run = run + 1 if m else 0
-            if run == n_min:
-                n += 1
-        return n
+        """Nombre de passages au-dessus du seuil tenus au moins n_min échantillons."""
+        m = np.r_[False, masque, False].astype(int)
+        bords = np.flatnonzero(np.diff(m))
+        longueurs = bords[1::2] - bords[::2]
+        return int((longueurs >= n_min).sum())
 
     return {
         "distance_m": dist.sum(),
