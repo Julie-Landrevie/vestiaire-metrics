@@ -152,6 +152,19 @@ def section_gps(s_all: pd.DataFrame, noms: pd.DataFrame, source_noms: str) -> tu
     s["date"] = pd.to_datetime(s["date"], errors="coerce")
     h = []
 
+    # Gardiennes probables : vitesse max médiane sous 20 km/h sur au moins 10 séances.
+    # Leur activité n'est pas comparable à celle des joueuses de champ : elles sont écartées.
+    vmax_j = s.groupby("label").agg(n=("fichier", "size"), vmax=("vitesse_max_kmh", "median"))
+    gardiennes = sorted(vmax_j[(vmax_j["n"] >= 10) & (vmax_j["vmax"] < 20)].index)
+    toutes = s
+    s = s[~s["label"].isin(gardiennes)].copy()
+
+    # Jours de match probables : SoccerMon ne distingue pas match et entraînement. On retient les
+    # jours où au moins 8 joueuses d'une équipe ont du GPS et où leur distance médiane dépasse 7 km.
+    jour = s.groupby(["equipe", "date"]).agg(n=("label", "size"), dmed=("distance_m", "median")).reset_index()
+    jours_match = jour[(jour["n"] >= 8) & (jour["dmed"] >= 7000)][["equipe", "date"]]
+    s["match_probable"] = s.merge(jours_match.assign(m=True), on=["equipe", "date"], how="left")["m"].fillna(False).astype(bool).to_numpy()
+
     # ---- en bref
     avec_f = (s["nb_sprints" + F] > 0).mean()
     avec_m = (s["nb_sprints" + M] > 0).mean()
@@ -217,8 +230,28 @@ def section_gps(s_all: pd.DataFrame, noms: pd.DataFrame, source_noms: str) -> tu
         ax.set_ylabel("Nombre de séances")
         ax.legend(frameon=False, fontsize=9)
     h.append(image(fig, "Distributions par séance"))
+    h.append("<p class='note'>Les séances au-delà du 98e centile sont regroupées dans la dernière barre.</p>")
     h.append("<p>Avec les seuils masculins, les séances s'entassent à zéro : il devient difficile de distinguer les joueuses. "
              "Avec les seuils féminins, la distribution s'étale.</p>")
+
+    # ---- matchs probables
+    m = s[s["match_probable"]]
+    if len(m) >= 30:
+        h.append("<h2>3. Les jours de match probables</h2>")
+        h.append(f"<p>SoccerMon ne distingue pas matchs et entraînements. En retenant les jours où au moins 8 joueuses d'une équipe "
+                 f"ont couru plus de 7 km en médiane, on isole <strong>{fr(len(jours_match), 0)} jours</strong> "
+                 f"({fr(len(m), 0)} séances de joueuses) qui ressemblent à des matchs. C'est le contexte des seuils de SkillCorner.</p>")
+        lignes = []
+        for nom, d in (("Jours de match probables", m), ("Autres jours", s[~s["match_probable"]])):
+            lignes.append({"": nom, "Séances": fr(len(d), 0),
+                           "Distance médiane (km)": fr(d["distance_m"].median() / 1000, 1),
+                           "Au moins un sprint (masc.)": pct((d["nb_sprints" + M] > 0).mean()),
+                           "Au moins un sprint (fém.)": pct((d["nb_sprints" + F] > 0).mean()),
+                           "Sprint médian masc. (m)": fr(d["distance_sprint_m" + M].median(), 0),
+                           "Sprint médian fém. (m)": fr(d["distance_sprint_m" + F].median(), 0)})
+        h.append(tableau(pd.DataFrame(lignes)))
+        h.append(f"<p>En match, avec le seuil masculin, {pct((m['nb_sprints' + M] == 0).mean())} des séances de joueuses "
+                 f"n'ont toujours aucun sprint, contre {pct((m['nb_sprints' + F] == 0).mean())} avec le seuil féminin.</p>")
 
     # ---- joueuses
     j = s.groupby(["equipe", "label"]).agg(
@@ -229,8 +262,11 @@ def section_gps(s_all: pd.DataFrame, noms: pd.DataFrame, source_noms: str) -> tu
         acc_m=("nb_acc_hautes" + M, "mean"), acc_f=("nb_acc_hautes" + F, "mean"),
     ).reset_index()
     j = j[j["seances"] >= 10].copy()
-    h.append("<h2>3. Les joueuses</h2>")
-    h.append(f"<p>{len(j)} joueuses avec au moins 10 séances. Noms : {source_noms}.</p>")
+    h.append("<h2>4. Les joueuses de champ</h2>")
+    h.append(f"<p>{len(j)} joueuses de champ avec au moins 10 séances. Noms : {source_noms}.</p>")
+    if gardiennes:
+        h.append(f"<p class='note'>Écartées comme gardiennes probables (vitesse max médiane sous 20 km/h) : {', '.join(gardiennes)}. "
+                 "Si l'une d'elles n'est pas gardienne, me le signaler.</p>")
     jj = j.sort_values("sprint_f")
     fig, ax = plt.subplots(figsize=(9, max(3.5, .24 * len(jj) + 1)))
     y = np.arange(len(jj))
@@ -249,7 +285,7 @@ def section_gps(s_all: pd.DataFrame, noms: pd.DataFrame, source_noms: str) -> tu
     corr_s = j["rang_sprint_m"].corr(j["rang_sprint_f"])
     corr_a = j["rang_acc_m"].corr(j["rang_acc_f"])
     caches = j[((j["rang_sprint_m"] <= 25) & (j["rang_sprint_f"] >= 50)) | ((j["rang_acc_m"] <= 25) & (j["rang_acc_f"] >= 50))]
-    h.append("<h2>4. Des profils cachés par les seuils masculins ?</h2>")
+    h.append("<h2>5. Des profils cachés par les seuils masculins ?</h2>")
     h.append(f"<p>Chaque joueuse est classée parmi les {len(j)} joueuses (rang en percentile), une fois avec chaque jeu de seuils. "
              f"Corrélation entre les deux classements : <strong>{fr(corr_s, 2)}</strong> pour le sprint, "
              f"<strong>{fr(corr_a, 2)}</strong> pour les accélérations hautes. Une joueuse « cachée » est dans le quart inférieur "
@@ -278,8 +314,10 @@ def section_gps(s_all: pd.DataFrame, noms: pd.DataFrame, source_noms: str) -> tu
         })[["label", "equipe", "seances", "Sprint masc. (m)", "Sprint fém. (m)", "Rang sprint masc. → fém.", "Rang accél. masc. → fém."]]
         h.append(tableau(t.rename(columns={"label": "Joueuse", "equipe": "Équipe", "seances": "Séances"})))
     else:
-        h.append("<p>Aucune joueuse ne remplit les deux conditions : sur ces données, les seuils changent surtout les volumes, "
-                 "moins la hiérarchie.</p>")
+        h.append("<p>Aucune joueuse ne remplit les deux conditions. Sur des moyennes de plusieurs dizaines de séances, le classement "
+                 "des joueuses bouge peu : les seuils féminins changent surtout ce qu'on mesure chez chacune (plus de sprints, plus "
+                 "d'accélérations), pas leur ordre. L'effet « Beever-Jones » montré par SkillCorner portait sur des actions rares "
+                 "(accélérations explosives menant à un sprint) mesurées en match, où un seuil trop haut ramène beaucoup de joueuses à zéro.</p>")
 
     # ---- tableau complet
     t = j.sort_values(["equipe", "label"]).assign(**{
@@ -298,7 +336,8 @@ def section_gps(s_all: pd.DataFrame, noms: pd.DataFrame, source_noms: str) -> tu
     # ---- qualité
     q = [("Fichiers lus", fr(len(s_all), 0)), ("Fichiers illisibles", fr(int(erreurs.sum()), 0)),
          ("Séances écartées (moins de 10 min de signal ou de 300 m)", fr(len(lues) - len(s), 0)),
-         ("Séances retenues", fr(len(s), 0)),
+         ("Séances retenues", fr(len(toutes), 0)),
+         ("Dont séances de gardiennes probables (écartées des comparaisons)", fr(len(toutes) - len(s), 0)),
          ("Lignes par instant dans les fichiers (doublons retirés)", fr(lues["lignes_par_instant"].median(), 0)),
          ("Fréquence GPS (médiane)", fr(lues["frequence_hz"].median(), 0) + " Hz"),
          ("Unité de vitesse lue", ", ".join(lues["unite_vitesse"].dropna().unique())),
@@ -306,7 +345,7 @@ def section_gps(s_all: pd.DataFrame, noms: pd.DataFrame, source_noms: str) -> tu
          ("Signal perdu (médiane par séance)", pct(s["part_signal_perdu"].median(), 1)),
          ("Instants sans satellite (médiane)", pct(s["part_sans_satellite"].median(), 1)),
          ("Vitesse max médiane", fr(s["vitesse_max_kmh"].median(), 1) + " km/h")]
-    h.append("<h2>5. Qualité des données</h2>" + tableau(pd.DataFrame(q, columns=["Contrôle", "Valeur"])))
+    h.append("<h2>6. Qualité des données</h2>" + tableau(pd.DataFrame(q, columns=["Contrôle", "Valeur"])))
     if erreurs.any():
         ex = s_all.loc[erreurs, "erreur"].value_counts().head(3)
         h.append("<p class='note'>Erreurs les plus fréquentes : " + " · ".join(f"{k} ({v})" for k, v in ex.items()) + "</p>")
@@ -404,7 +443,7 @@ def main() -> None:
         corps.append(html_gps)
     if sm is not None:
         try:
-            corps.append("<h2>6. Charge et forme (questionnaires)</h2>" + section_subjectif(sm, noms))
+            corps.append("<h2>7. Charge et forme (questionnaires)</h2>" + section_subjectif(sm, noms))
         except Exception as e:
             corps.append(f"<h2>6. Charge et forme (questionnaires)</h2><p>Partie non calculée ({type(e).__name__} : {e}).</p>")
 
