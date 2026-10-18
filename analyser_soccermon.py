@@ -95,7 +95,7 @@ def explorer(dossier: Path, titre: str, lignes: list[str]) -> None:
 
 # --------------------------------------------------------------------------- GPS
 def traiter_gps(dossier: Path, cache: Path, max_fichiers: int | None, coeurs: int) -> pd.DataFrame:
-    fichiers = gps.lister_fichiers(dossier)[:max_fichiers]
+    fichiers = gps.echantillon(gps.lister_fichiers(dossier), max_fichiers)
     deja = set(pd.read_csv(cache, usecols=["fichier"])["fichier"]) if cache.exists() else set()
     a_faire = [p for p in fichiers if p.name not in deja]
     print(f"  {len(fichiers)} fichiers GPS, {len(a_faire)} à traiter ({len(deja)} déjà faits), {coeurs} cœur(s)")
@@ -124,7 +124,14 @@ def traiter_gps(dossier: Path, cache: Path, max_fichiers: int | None, coeurs: in
 
 def choisir_noms(seances: pd.DataFrame, correspondance: Path | None, sm: pd.DataFrame | None) -> tuple[pd.DataFrame, str]:
     if correspondance and correspondance.exists():
-        return gps.lire_correspondance(correspondance), f"noms repris du projet R ({correspondance.name})"
+        noms = gps.lire_correspondance(correspondance)
+        if len(seances):
+            pj = seances.groupby("joueuse", as_index=False)["date"].min().rename(columns={"date": "premier_jour"})
+            noms, ajoutes = gps.completer_noms(noms, pj)
+            if ajoutes:
+                return noms, (f"noms repris du projet R ({correspondance.name}) ; {len(ajoutes)} joueuse(s) absente(s) de ce fichier, "
+                              f"présente(s) seulement dans le GPS, numérotée(s) à la suite : {', '.join(sorted(ajoutes))}")
+        return noms, f"noms repris du projet R ({correspondance.name})"
     if sm is not None and "daily_load" in sm:
         pj = sm[sm["daily_load"] > 0].groupby("joueuse", as_index=False)["date"].min().rename(columns={"date": "premier_jour"})
         return gps.noms_lisibles(pj), "noms calculés comme dans le projet R (premier jour avec une charge)"
@@ -139,9 +146,9 @@ def section_gps(s_all: pd.DataFrame, noms: pd.DataFrame, source_noms: str) -> tu
     if s.empty:
         return "<p><strong>Aucune séance exploitable.</strong> Voir exploration.txt.</p>", pd.DataFrame(), pd.DataFrame()
     equipe_fichier = s["equipe"] if "equipe" in s else pd.Series("Équipe ?", index=s.index)
-    s = s.drop(columns=["equipe"], errors="ignore").merge(noms, left_on="joueuse", right_on="identifiant_soccermon", how="left")
-    s["label"] = s["label"].fillna(s["joueuse"].str[:10])
-    s["equipe"] = s["equipe"].fillna(equipe_fichier.reset_index(drop=True))
+    s["label"], eq = gps.appliquer_noms(s["joueuse"], noms)
+    s["equipe"] = eq.fillna(equipe_fichier)
+    s["label"] = s["label"].fillna("?")
     s["date"] = pd.to_datetime(s["date"], errors="coerce")
     h = []
 
@@ -260,7 +267,8 @@ def section_gps(s_all: pd.DataFrame, noms: pd.DataFrame, source_noms: str) -> tu
         ax.set_xlim(0, 102); ax.set_ylim(0, 102)
         ax.set_xlabel("Rang avec les seuils masculins (percentile)")
         ax.set_ylabel("Rang avec les seuils féminins (percentile)")
-        ax.set_title(f"{titre} : {int(cache.sum())} joueuse(s) cachée(s)")
+        nb = int(cache.sum())
+        ax.set_title(f"{titre} : " + ("aucune joueuse cachée" if nb == 0 else f"{nb} joueuse{'s' if nb > 1 else ''} cachée{'s' if nb > 1 else ''}"))
     h.append(image(fig, "Profils cachés"))
     if len(caches):
         t = caches.assign(**{
@@ -291,7 +299,7 @@ def section_gps(s_all: pd.DataFrame, noms: pd.DataFrame, source_noms: str) -> tu
     q = [("Fichiers lus", fr(len(s_all), 0)), ("Fichiers illisibles", fr(int(erreurs.sum()), 0)),
          ("Séances écartées (moins de 10 min de signal ou de 300 m)", fr(len(lues) - len(s), 0)),
          ("Séances retenues", fr(len(s), 0)),
-         ("Lignes par instant (médiane, doublons retirés)", fr(lues["lignes_par_instant"].median(), 0)),
+         ("Lignes par instant dans les fichiers (doublons retirés)", fr(lues["lignes_par_instant"].median(), 0)),
          ("Fréquence GPS (médiane)", fr(lues["frequence_hz"].median(), 0) + " Hz"),
          ("Unité de vitesse lue", ", ".join(lues["unite_vitesse"].dropna().unique())),
          ("Format du temps", ", ".join(lues["format_temps"].dropna().unique())),
@@ -307,8 +315,8 @@ def section_gps(s_all: pd.DataFrame, noms: pd.DataFrame, source_noms: str) -> tu
 
 # --------------------------------------------------------------------------- questionnaires
 def section_subjectif(sm: pd.DataFrame, noms: pd.DataFrame) -> str:
-    lab = dict(zip(noms["identifiant_soccermon"], noms["label"]))
-    sm = sm.assign(joueuse=sm["joueuse"].map(lambda x: lab.get(x, x)))
+    lab, _ = gps.appliquer_noms(sm["joueuse"], noms)
+    sm = sm.assign(joueuse=lab.fillna(sm["joueuse"]))
     cols = {c.lower(): c for c in sm.columns}
     h = [f"<p>Indicateurs trouvés : {', '.join(c for c in sm.columns if c not in ('date', 'joueuse'))}.</p>"]
     c_rpe, c_duree = cols.get("rpe"), next((cols[k] for k in ("duration", "duree") if k in cols), None)
@@ -391,6 +399,7 @@ def main() -> None:
         joueuses.to_csv(a.sortie / "joueuses_gps.csv", index=False)
         if len(retenues):
             avant = ["label", "equipe", "date"]
+            retenues = retenues.assign(date=retenues["date"].dt.strftime("%Y-%m-%d"))
             retenues[avant + [c for c in retenues.columns if c not in avant]].round(2).to_csv(a.sortie / "seances_gps.csv", index=False)
         corps.append(html_gps)
     if sm is not None:
@@ -399,7 +408,7 @@ def main() -> None:
         except Exception as e:
             corps.append(f"<h2>6. Charge et forme (questionnaires)</h2><p>Partie non calculée ({type(e).__name__} : {e}).</p>")
 
-    essai = f" Essai limité à {a.max_fichiers} fichiers." if a.max_fichiers else ""
+    essai = f" Essai sur {a.max_fichiers} fichiers répartis entre les équipes et sur toute la période." if a.max_fichiers else ""
     html = f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Vestiaire · seuils féminins sur SoccerMon</title><style>{STYLE}</style></head><body>
 <h1>Seuils féminins contre seuils masculins</h1>

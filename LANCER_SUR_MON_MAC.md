@@ -13,7 +13,7 @@ pip install -q -r requirements.txt && pip install -q -e .
 pytest -q
 ```
 
-`pytest` doit afficher « 17 passed ».
+`pytest` doit afficher « 19 passed ».
 
 ## Lancer l'analyse
 
