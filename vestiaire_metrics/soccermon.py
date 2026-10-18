@@ -75,6 +75,8 @@ CORRESPONDANCE_FORME = {
 def vers_etats_vestiaire(df: pd.DataFrame, inverser: tuple[str, ...] = ()) -> pd.DataFrame:
     """Transforme les colonnes de bien-être SoccerMon en questionnaire Vestiaire (1 à 5)."""
     cols = {k: v for k, v in CORRESPONDANCE_FORME.items() if k in df}
+    if len(cols) < len(CORRESPONDANCE_FORME):  # questionnaire incomplet : pas de score de forme
+        return pd.DataFrame(columns=["date", "joueuse", *CORRESPONDANCE_FORME.values()])
     out = df[["date", "joueuse", *cols]].rename(columns=cols)
     for q in inverser:
         out[q] = 6 - out[q]
