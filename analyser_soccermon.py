@@ -64,7 +64,16 @@ def pct(x, d=0):
     return fr(100 * x, d) + " %"
 
 
+DOSSIER_FIGURES: Path | None = None
+
+
 def image(fig, alt) -> str:
+    """Graphique intégré au rapport, et copie PNG dans resultats_vestiaire/figures (pour le README)."""
+    if DOSSIER_FIGURES is not None:
+        import unicodedata
+        nom = unicodedata.normalize("NFKD", alt.lower()).encode("ascii", "ignore").decode()
+        nom = "".join(c if c.isalnum() else "_" for c in nom).strip("_")
+        fig.savefig(DOSSIER_FIGURES / f"{nom}.png", dpi=150, bbox_inches="tight")
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight")
     plt.close(fig)
@@ -411,6 +420,9 @@ def main() -> None:
     if not a.gps and not a.subjectif:
         p.error("indiquer au moins --gps ou --subjectif")
     a.sortie.mkdir(parents=True, exist_ok=True)
+    global DOSSIER_FIGURES
+    DOSSIER_FIGURES = a.sortie / "figures"
+    DOSSIER_FIGURES.mkdir(exist_ok=True)
 
     expl = []
     for dossier, titre in ((a.gps, "GPS"), (a.subjectif, "Subjectif")):
