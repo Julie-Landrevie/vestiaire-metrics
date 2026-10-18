@@ -19,3 +19,4 @@ packages = ["vestiaire_metrics"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
