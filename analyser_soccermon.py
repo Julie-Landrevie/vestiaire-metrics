@@ -123,7 +123,7 @@ def section_gps(s: pd.DataFrame) -> str:
 
     # rang des joueuses : est-ce que le classement change ?
     rangs = par_j.rank(ascending=False)
-    corr = rangs.iloc[:, 0].corr(rangs.iloc[:, 1], method="spearman")
+    corr = rangs.iloc[:, 0].corr(rangs.iloc[:, 1])  # Pearson sur les rangs = Spearman, sans scipy
     html.append(f"<p>Corrélation de rang (Spearman) entre les deux classements de joueuses : <strong>{fr(corr, 2)}</strong>. "
                 "Plus elle est basse, plus le choix des seuils change la hiérarchie.</p>")
     return "\n".join(html)
