@@ -56,6 +56,22 @@ def lister_fichiers(dossier: str | Path) -> list[Path]:
     return sm or tous
 
 
+def echantillon(fichiers: list[Path], n: int | None) -> list[Path]:
+    """n fichiers répartis équitablement entre les équipes et sur toute la période
+    (et non les n premiers, qui viendraient tous de la même équipe et du même mois)."""
+    if not n or n >= len(fichiers):
+        return fichiers
+    par_equipe: dict[str, list[Path]] = {}
+    for p in fichiers:
+        par_equipe.setdefault(infos_nom_fichier(p).get("equipe", "?"), []).append(p)
+    choix = []
+    for liste in par_equipe.values():
+        k = max(1, round(n * len(liste) / len(fichiers)))
+        idx = np.unique(np.linspace(0, len(liste) - 1, k).round().astype(int))
+        choix += [liste[i] for i in idx]
+    return sorted(choix)
+
+
 def infos_nom_fichier(p: Path) -> dict:
     m = MOTIF_SOCCERMON.match(p.name)
     if not m:
@@ -184,7 +200,7 @@ def resumer_trace(df: pd.DataFrame, col_vitesse: str, col_temps: str | None, col
     res = {
         "duree_min": duree_s / 60,
         "signal_min": signal_s / 60,
-        "part_signal_perdu": 1 - signal_s / duree_s if duree_s > 0 else np.nan,
+        "part_signal_perdu": max(0.0, 1 - signal_s / duree_s) if duree_s > 0 else np.nan,
         "part_sans_satellite": float(1 - fix.mean()),
         "points_aberrants": aberrantes,
         "lignes_par_instant": round(doublons, 1),
@@ -249,6 +265,35 @@ def noms_lisibles(premiers_jours: pd.DataFrame) -> pd.DataFrame:
     d["label"] = d["code"] + "-" + (d.groupby("code").cumcount() + 1).map("{:02d}".format)
     return d.rename(columns={"joueuse": "identifiant_soccermon"}).assign(
         equipe="Équipe " + d["code"])[["identifiant_soccermon", "equipe", "label"]]
+
+
+def completer_noms(noms: pd.DataFrame, premiers_jours: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Ajoute un nom aux joueuses absentes de la correspondance (présentes seulement dans le GPS),
+    en continuant la numérotation de leur équipe : si l'équipe B va jusqu'à B-13, elles deviennent
+    B-14, B-15… par ordre d'arrivée. La comparaison des identifiants ignore majuscules et espaces."""
+    cle = lambda x: str(x).strip().lower()
+    connus = {cle(i) for i in noms["identifiant_soccermon"]}
+    manquants = premiers_jours[~premiers_jours["joueuse"].map(cle).isin(connus)].copy()
+    if manquants.empty:
+        return noms, []
+    nouveaux = gps_noms = noms_lisibles(manquants)
+    gps_noms = gps_noms.copy()
+    gps_noms["code"] = gps_noms["label"].str[0]
+    deja = noms.assign(code=noms["label"].str[0], num=pd.to_numeric(noms["label"].str[2:], errors="coerce"))
+    depart = deja.groupby("code")["num"].max().fillna(0).astype(int).to_dict()
+    gps_noms["label"] = gps_noms.apply(
+        lambda r: f"{r['code']}-{depart.get(r['code'], 0) + int(r['label'][2:]):02d}", axis=1)
+    nouveaux = gps_noms.drop(columns="code")
+    return pd.concat([noms, nouveaux], ignore_index=True), list(nouveaux["label"])
+
+
+def appliquer_noms(ids: pd.Series, noms: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    """(label, équipe) pour chaque identifiant, comparaison insensible à la casse."""
+    cle = lambda x: str(x).strip().lower()
+    lab = dict(zip(noms["identifiant_soccermon"].map(cle), noms["label"]))
+    eq = dict(zip(noms["identifiant_soccermon"].map(cle), noms["equipe"]))
+    k = ids.map(cle)
+    return k.map(lab), k.map(eq)
 
 
 def lire_correspondance(chemin: str | Path) -> pd.DataFrame:
