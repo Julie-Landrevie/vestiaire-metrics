@@ -37,7 +37,7 @@ def generer(fin: str = "2026-10-13", nb_jours: int = 70, graine: int = 7):
         base_forme = rng.integers(3, 5, size=len(QUESTIONS)).astype(float)
         for d in jours:
             reste = pd.Timestamp(fin) - d
-            wd = d.dayofweek
+            wd = d.day_of_week
             if wd in SEMAINE_TYPE:
                 duree, rpe = SEMAINE_TYPE[wd]
                 facteur = 1.0

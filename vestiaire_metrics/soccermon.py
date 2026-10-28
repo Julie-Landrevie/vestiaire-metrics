@@ -17,12 +17,22 @@ from pathlib import Path
 import pandas as pd
 
 
+def lire_dates(col: pd.Series) -> pd.Series:
+    """Dates SoccerMon au format « 24.06.2020 » (jour en premier), ou ISO « 2020-06-24 »."""
+    txt = col.astype(str).str.strip()
+    if txt.str.match(r"^\d{2}\.\d{2}\.\d{4}$").mean() > 0.9:
+        return pd.to_datetime(txt, format="%d.%m.%Y", errors="coerce")
+    if txt.str.match(r"^\d{4}-\d{2}-\d{2}").mean() > 0.9:
+        return pd.to_datetime(txt.str[:10], format="%Y-%m-%d", errors="coerce")
+    return pd.to_datetime(txt, errors="coerce", dayfirst=True).dt.normalize()
+
+
 def lire_fichier_large(chemin: str | Path) -> pd.DataFrame:
     """Lit un CSV « large » (dates en lignes, joueuses en colonnes) et le passe en format long."""
     df = pd.read_csv(chemin)
     col_date = next((c for c in df.columns if c.lower() in ("date", "dates", "day", "unnamed: 0")), df.columns[0])
     df = df.rename(columns={col_date: "date"})
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+    df["date"] = lire_dates(df["date"])
     df = df.dropna(subset=["date"])
     long = df.melt(id_vars="date", var_name="joueuse", value_name="valeur")
     long["valeur"] = pd.to_numeric(long["valeur"], errors="coerce")
