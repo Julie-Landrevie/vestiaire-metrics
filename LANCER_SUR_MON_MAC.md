@@ -47,3 +47,14 @@ python analyser_soccermon.py --gps ~/Desktop/SoccerMon_GPS --subjectif ~/Desktop
 
 Dans `vestiaire-metrics/resultats_vestiaire` : des captures du rapport, `exploration.txt`, et en cas
 d'erreur les dernières lignes affichées dans le Terminal.
+
+## Exporter les vraies données pour le prototype
+
+Après une analyse GPS complète :
+
+```bash
+python exporter_prototype.py
+```
+
+Le script trouve seul les séances GPS, les questionnaires et les noms du projet R sur le bureau, choisit un jour
+et produit `prototype_donnees_reelles.json` (quelques Ko) pour l'écran Effectif et la fiche d'A-19.

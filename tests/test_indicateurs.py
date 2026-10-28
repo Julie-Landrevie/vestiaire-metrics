@@ -112,6 +112,20 @@ def test_statut_du_jour_sur_les_donnees_de_demo():
     st = statut_du_jour(charge, forme, douleurs, Reperes())
     assert st.loc["Camille D.", "statut"] == "alerte"
     assert st.loc["Inès B.", "statut"] == "a_surveiller"
-    assert "Ratio" in st.loc["Inès B.", "pourquoi"]
+    assert "ratio" in st.loc["Inès B.", "pourquoi"]
     assert st.loc["Jade T.", "pourquoi"] == "État du jour pas encore reçu"
     assert st.iloc[0]["statut"] == "alerte"  # tri : alertes en premier
+
+
+def test_statut_sans_seance_declaree_et_baisse_de_charge():
+    charge = pd.DataFrame({"charge_7j": [0.0, 2600.0, 1080.0], "ratio": [0.0, 0.77, 0.31],
+                           "evolution_pct": [-100.0, -23.0, -69.0]},
+                          index=pd.Index(["A-05", "A-19", "A-12"], name="joueuse"))
+    forme = pd.DataFrame({"forme": [15, 16, 14], "moyenne_perso": [14.9, 16.4, 15.2]}, index=charge.index)
+    st = statut_du_jour(charge, forme, None, Reperes())
+    assert st.loc["A-05", "statut"] == "sans_donnees"
+    assert st.loc["A-05", "pourquoi"].startswith("Aucune séance déclarée")
+    assert st.loc["A-19", "statut"] == "a_surveiller"
+    assert st.loc["A-19", "pourquoi"] == "Charge en baisse : ratio 0,77 (2\u202f600 sur 7 jours)"
+    assert st.loc["A-12", "pourquoi"].startswith("Forte baisse de charge")
+    assert list(st["statut"]) == ["a_surveiller", "a_surveiller", "sans_donnees"]

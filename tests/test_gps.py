@@ -57,3 +57,9 @@ def test_echantillon_reparti_entre_equipes():
         [Path(f"2021-06-{d:02d}-TeamB-y{d}.parquet") for d in range(1, 29)]
     e = gps.echantillon(sorted(f), 10)
     assert sum("TeamA" in p.name for p in e) == 5 and sum("TeamB" in p.name for p in e) == 5
+
+
+def test_dates_soccermon_jour_en_premier():
+    from vestiaire_metrics.soccermon import lire_dates
+    d = lire_dates(pd.Series(["01.07.2020", "24.06.2020"]))
+    assert list(d.dt.strftime("%Y-%m-%d")) == ["2020-07-01", "2020-06-24"]

@@ -6,3 +6,6 @@ __pycache__/
 .DS_Store
 data/
 resultats_vestiaire/
+*.egg-info/
+prototype_donnees_reelles.json
+maj_*/
