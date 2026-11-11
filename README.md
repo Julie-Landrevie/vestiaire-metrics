@@ -87,6 +87,22 @@ Le module calcule aussi ce qu'affiche le prototype de l'application :
 
 Le carnet [`notebooks/01_indicateurs_vestiaire.ipynb`](notebooks/01_indicateurs_vestiaire.ipynb) montre ces calculs sur un effectif fictif.
 
+## Vestiaire en images : ce que voit le staff
+
+Le prototype de Vestiaire (20 écrans, côté joueuse et côté staff) affiche ces indicateurs sur de vraies données SoccerMon, anonymisées : l'écran **Effectif du jour** et la **fiche joueuse**. Les trois figures ci-dessous en reprennent les visualisations principales. Elles sont produites par [`figures_vestiaire.py`](figures_vestiaire.py) à partir du fichier exporté par [`exporter_prototype.py`](exporter_prototype.py).
+
+**Fiche joueuse : un profil que les seuils masculins cachaient.** A-19 passe du 19e au 71e percentile en nombre de sprints quand on applique les seuils féminins. Ses accélérations hautes restent au 3e percentile : dans l'application, c'est une question à vérifier en vidéo, pas un diagnostic.
+
+![Profil d'A-19 sous seuils masculins et féminins](docs/figures/vestiaire/a19_seuils.png)
+
+**Effectif du jour : lire une baisse de charge dans son contexte.** La veille d'un match, plusieurs joueuses sont sous le repère de 0,8. Vestiaire l'écrit « charge en baisse » et rappelle qu'un affûtage est peut-être voulu ; une joueuse sans aucune séance déclarée n'est pas classée « sous-charge » mais « sans séance déclarée » (repos ou oubli de saisie ?).
+
+![Ratio aigu / chronique de l'effectif la veille d'un match](docs/figures/vestiaire/effectif_ratio.png)
+
+**Effectif du jour : volume et explosivité.** En match, courir beaucoup et multiplier les actions explosives sont deux qualités différentes.
+
+![Volume et actions explosives par match](docs/figures/vestiaire/volume_explosivite.png)
+
 ## Reproduire
 
 ```bash
@@ -99,6 +115,10 @@ pytest
 # après avoir téléchargé les fichiers GPS de SoccerMon (osf.io/uryz9)
 python analyser_soccermon.py --gps ~/chemin/vers/SoccerMon_GPS
 open resultats_vestiaire/rapport_vestiaire.html
+
+# figures de Vestiaire (après l'analyse, avec les questionnaires SoccerMon)
+python exporter_prototype.py
+python figures_vestiaire.py
 ```
 
 L'analyse complète lit environ 10 000 fichiers ; elle peut être interrompue et reprise. Mode d'emploi détaillé : [`LANCER_SUR_MON_MAC.md`](LANCER_SUR_MON_MAC.md).
